@@ -1,0 +1,17 @@
+#pragma once
+
+// SKSE Menu Framework 3 API (https://github.com/QTR-Modding/SKSE-Menu-Framework-3-API, LGPL-2.1).
+// It pulls in windows.h, so only the UI translation units include it.
+#ifndef WIN32_LEAN_AND_MEAN
+#	define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#	define NOMINMAX
+#endif
+#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+#pragma warning(push, 0)
+#include "SKSEMenuFramework.h"
+#pragma warning(pop)
+
+#undef GetObject
+#undef PlaySound
