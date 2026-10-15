@@ -11,7 +11,6 @@ namespace Settings
 		std::string language{};          // Lang id, empty = the game's language
 		std::string pickUpText{};        // empty = "Pick up (hold)" in the menu's language
 		float       holdTime{ 0.45f };       // seconds Activate has to be held to pick a cat up
-		bool        hint{ true };
 		std::string races{};             // more races besides the ones in CatCarry\Animals\*.ini
 
 		// [Pickup]

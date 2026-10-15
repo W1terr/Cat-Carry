@@ -8,7 +8,6 @@
 	"Hold Activate for": "Удерживать «Активировать»",
 	"%.2f s": "%.2f с",
 	"Holding Activate this long picks the cat up; a short tap stays the game's normal activation": "Удержание «Активировать» столько времени берёт кошку на руки; короткое нажатие остаётся обычной активацией",
-	"Show the put down hint": "Показывать подсказку, как опустить",
 	"Picking up": "Подъём",
 	"Kneel for cats on the floor": "Вставать на колено для кошек на полу",
 	"Kneel when lower than": "Вставать на колено, если ниже",
@@ -56,7 +55,6 @@
 	"Reset this head": "Сбросить эту голову",
 	"No animal files loaded": "Файлы животных не загружены",
 	"If you see ? instead of letters: in SKSE Menu Framework open Options > Open Settings and set Character Glyphs to {}.": "Если вместо букв видны ?: в SKSE Menu Framework откройте Options > Open Settings и выберите Character Glyphs: {}.",
-	"Hold Activate to put the cat down.": "Удерживайте «Активировать», чтобы опустить кошку.",
 	"Pick up (hold)": "Взять на руки (удерживать)",
 	"House Cats": "Домашние кошки",
 	"Piglet": "Piglet"

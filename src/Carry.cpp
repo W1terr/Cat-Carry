@@ -2,7 +2,6 @@
 
 #include "Body.h"
 #include "CatPose.h"
-#include "Lang.h"
 #include "MathUtil.h"
 #include "Settings.h"
 
@@ -110,7 +109,6 @@ namespace Carry
 			bool            catAI{ true };
 			bool            catBack{ false };  // the real cat was put back into the world
 			bool            putDownRequest{ false };
-			bool            hintShown{ false };
 			bool            keysBlocked{ false };  // sprint, sneak and POV keys
 			bool            chestKnown{ false };
 			NiMatrix3       chestToBody;            // body frame axes in the chest bone's space
@@ -751,9 +749,7 @@ namespace Carry
 					camera->ForceFirstPerson();
 				}
 			}
-			const bool hint = state.hintShown;
 			state = {};
-			state.hintShown = hint;
 		}
 
 		// stop right now (combat, swimming, ...): the cat lands where it is
@@ -895,10 +891,6 @@ namespace Carry
 			state.drivenFor = 0.0f;
 			state.phase = Phase::kHold;
 			state.time = 0.0f;
-			if (Settings::Get().hint && !state.hintShown) {
-				state.hintShown = true;
-				RE::SendHUDMessage::ShowHUDMessage(Lang::Copy("Hold Activate to put the cat down.").c_str());
-			}
 		}
 
 		void StartLower()
@@ -1568,7 +1560,7 @@ namespace Carry
 			return false;
 		}
 		auto* cat = a_ref->As<RE::Actor>();
-		state = { .hintShown = state.hintShown };
+		state = {};
 		state.cat = cat->GetHandle();
 		if (const auto* animal = FindAnimal(cat->GetRace()); animal) {
 			state.animalSize = animal->size;
@@ -1711,6 +1703,19 @@ namespace Carry
 		}
 	}
 
+	bool KeepsActivateKey()
+	{
+		if (Active()) {
+			return true;
+		}
+		if (!Settings::Get().enabled) {
+			return false;
+		}
+		auto* pick = RE::CrosshairPickData::GetSingleton();
+		auto  target = pick ? pick->GetActiveTarget().get() : nullptr;
+		return target && IsCat(target.get());
+	}
+
 	bool Active()
 	{
 		return state.phase != Phase::kIdle;
@@ -1725,9 +1730,7 @@ namespace Carry
 		BlockKeys(false);
 		Body::Release();
 		CatPose::Release();
-		const bool hint = state.hintShown;
 		state = {};
-		state.hintShown = hint;
 		watchAfter = 0.0f;
 	}
 

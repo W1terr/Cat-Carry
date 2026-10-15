@@ -119,7 +119,6 @@ namespace Settings
 		Get(t, "General.sLanguage", v.language);
 		Get(t, "General.sPickUpText", v.pickUpText);
 		Get(t, "General.fHoldTime", v.holdTime);
-		Get(t, "General.bHint", v.hint);
 		Get(t, "General.sRaces", v.races);
 		Get(t, "Pickup.bKneel", v.kneel);
 		Get(t, "Pickup.fKneelBelow", v.kneelBelow);
@@ -169,8 +168,6 @@ namespace Settings
 		o << "sPickUpText = " << v.pickUpText << "\n";
 		o << "; seconds you hold Activate to pick the cat up (a short tap stays the game's normal activation)\n";
 		o << "fHoldTime = " << Number(v.holdTime) << "\n";
-		o << "; a notification with the key to put the cat down\n";
-		o << "bHint = " << v.hint << "\n";
 		o << "; more races that can be picked up (plugin|form ID, separated by commas) besides the animals in\n";
 		o << "; SKSE\\Plugins\\CatCarry\\Animals\\*.ini (installed by the FOMOD: House Cats, Piglet)\n";
 		o << "sRaces = " << v.races << "\n\n";

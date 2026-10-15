@@ -8,7 +8,6 @@
 	"Hold Activate for": "Tieni premuto Attiva per",
 	"%.2f s": "%.2f s",
 	"Holding Activate this long picks the cat up; a short tap stays the game's normal activation": "Tenere premuto Attiva così a lungo prende il gatto; una pressione breve resta la normale attivazione del gioco",
-	"Show the put down hint": "Mostra il suggerimento per posarlo",
 	"Picking up": "Prendere in braccio",
 	"Kneel for cats on the floor": "Inginocchiati per i gatti a terra",
 	"Kneel when lower than": "Inginocchiati se più basso di",
@@ -56,7 +55,6 @@
 	"Reset this head": "Ripristina questa testa",
 	"No animal files loaded": "Nessun file animale caricato",
 	"If you see ? instead of letters: in SKSE Menu Framework open Options > Open Settings and set Character Glyphs to {}.": "Se vedi ? al posto delle lettere: in SKSE Menu Framework apri Options > Open Settings e imposta Character Glyphs su {}.",
-	"Hold Activate to put the cat down.": "Tieni premuto Attiva per posare il gatto.",
 	"Pick up (hold)": "Prendi in braccio (tieni premuto)",
 	"House Cats": "Gatti domestici",
 	"Piglet": "Piglet"

@@ -75,7 +75,6 @@ namespace Menu
 			Hint("How close (game units, along the ground) you have to be to pick a cat up");
 			SliderFloat(Id("Hold Activate for").c_str(), &s.holdTime, 0.15f, 1.5f, T("%.2f s"));
 			Hint("Holding Activate this long picks the cat up; a short tap stays the game's normal activation");
-			Checkbox(Id("Show the put down hint").c_str(), &s.hint);
 
 			SeparatorText(T("Picking up"));
 			Checkbox(Id("Kneel for cats on the floor").c_str(), &s.kneel);

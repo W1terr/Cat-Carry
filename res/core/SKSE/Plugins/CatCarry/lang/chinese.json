@@ -8,7 +8,6 @@
 	"Hold Activate for": "按住啟動的時間",
 	"%.2f s": "%.2f 秒",
 	"Holding Activate this long picks the cat up; a short tap stays the game's normal activation": "按住啟動這麼久就會抱起貓咪；短按仍是遊戲的一般啟動",
-	"Show the put down hint": "顯示放下的提示",
 	"Picking up": "抱起",
 	"Kneel for cats on the floor": "對地上的貓咪跪下",
 	"Kneel when lower than": "低於此高度時跪下",
@@ -56,7 +55,6 @@
 	"Reset this head": "重設這個頭部",
 	"No animal files loaded": "沒有載入任何動物檔案",
 	"If you see ? instead of letters: in SKSE Menu Framework open Options > Open Settings and set Character Glyphs to {}.": "如果文字顯示為 ?：請在 SKSE Menu Framework 開啟 Options > Open Settings，並將 Character Glyphs 設為 {}。",
-	"Hold Activate to put the cat down.": "按住啟動以放下貓咪。",
 	"Pick up (hold)": "抱起 (按住)",
 	"House Cats": "家貓",
 	"Piglet": "Piglet"

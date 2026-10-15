@@ -310,13 +310,18 @@ namespace Body
 			arm.fingers.clear();
 			const NiPoint3 palm = hand->world.rotate * kHandPalm;
 			for (int finger = 0; finger < 5; ++finger) {
+				NiAVObject* previous = hand;
 				for (int joint = 0; joint < 3; ++joint) {
 					auto* node = Find(hand, std::format("NPC {} Finger{}{} [{}F{}{}]", s, finger, joint, s, finger, joint));
 					if (!node) {
 						continue;
 					}
-					auto*    child = Find(hand, std::format("NPC {} Finger{}{} [{}F{}{}]", s, finger, joint + 1, s, finger, joint + 1));
-					NiPoint3 along = child ? Normalized(child->local.translate) : kHandFingers;
+					// the finger's direction from where the joints are: XPMSSE puts "CME" nodes between the finger bones,
+					// so a child's local offset isn't in this bone's space (fingers bent sideways / backwards)
+					auto*          child = Find(hand, std::format("NPC {} Finger{}{} [{}F{}{}]", s, finger, joint + 1, s, finger, joint + 1));
+					const NiPoint3 worldAlong = child ? child->world.translate - node->world.translate : node->world.translate - previous->world.translate;
+					previous = node;
+					NiPoint3 along = Length(worldAlong) > 1e-3f ? Normalized(node->world.rotate.Transpose() * worldAlong) : kHandFingers;
 					NiPoint3 axis = Cross(along, node->world.rotate.Transpose() * palm);
 					if (Length(axis) < 1e-3f) {
 						continue;

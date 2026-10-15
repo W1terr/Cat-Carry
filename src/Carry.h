@@ -43,6 +43,8 @@ namespace Carry
 	bool InterceptActivate(RE::TESObjectREFR* a_ref);
 	// every Activate key event (any device): holding it picks a cat up / puts it down, a tap opens doors meanwhile
 	void OnActivateKey(bool a_pressed, float a_heldFor);
+	// the game's activate handler shouldn't see the Activate key held now (you look at a pet or carry one)
+	bool KeepsActivateKey();
 
 	bool Active();
 	// a game is loaded / started: forget everything

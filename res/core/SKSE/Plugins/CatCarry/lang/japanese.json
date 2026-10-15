@@ -8,7 +8,6 @@
 	"Hold Activate for": "起動を長押しする時間",
 	"%.2f s": "%.2f 秒",
 	"Holding Activate this long picks the cat up; a short tap stays the game's normal activation": "起動をこの時間長押しすると猫を抱き上げます。短く押すと通常の起動のままです",
-	"Show the put down hint": "下ろし方のヒントを表示",
 	"Picking up": "抱き上げ",
 	"Kneel for cats on the floor": "床の猫にはひざまずく",
 	"Kneel when lower than": "この高さより低いとひざまずく",
@@ -56,7 +55,6 @@
 	"Reset this head": "この頭をリセット",
 	"No animal files loaded": "動物ファイルが読み込まれていません",
 	"If you see ? instead of letters: in SKSE Menu Framework open Options > Open Settings and set Character Glyphs to {}.": "文字の代わりに ? が表示される場合: SKSE Menu Framework で Options > Open Settings を開き、Character Glyphs を {} に設定してください。",
-	"Hold Activate to put the cat down.": "起動を長押しすると猫を下ろします。",
 	"Pick up (hold)": "抱き上げる (長押し)",
 	"House Cats": "飼い猫",
 	"Piglet": "Piglet"

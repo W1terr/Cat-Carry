@@ -65,6 +65,31 @@ namespace Hooks
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
 
+		// Holding Activate on a follower (Piglet) opens the game's follower commands. While you look at a pet (or
+		// carry one) the activate handler doesn't see the key held: no commands; the release comes as a quick tap,
+		// so a tap still talks to it and after a pickup our activate hook keeps that activation back.
+		struct ActivateButton
+		{
+			static void thunk(RE::ActivateHandler* a_this, RE::ButtonEvent* a_event, RE::PlayerControlsData* a_data)
+			{
+				if (a_event && Carry::KeepsActivateKey()) {
+					if (a_event->IsHeld()) {
+						return;
+					}
+					if (a_event->IsUp()) {
+						auto&       held = a_event->GetRuntimeData().heldDownSecs;
+						const float was = held;
+						held = 0.0f;
+						func(a_this, a_event, a_data);
+						held = was;
+						return;
+					}
+				}
+				func(a_this, a_event, a_data);
+			}
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
+
 		class InputSink : public RE::BSTEventSink<RE::InputEvent*>
 		{
 		public:
@@ -123,6 +148,10 @@ namespace Hooks
 
 		REL::Relocation<std::uintptr_t> npc{ RE::VTABLE_TESNPC[0] };
 		NPCActivate::func = npc.write_vfunc(0x37, NPCActivate::thunk);
+
+		REL::Relocation<std::uintptr_t> activate{ RE::VTABLE_ActivateHandler[0] };
+		// ProcessButton: slot 4, 6 from 1.7.99 on (two motion input functions came before it)
+		ActivateButton::func = activate.write_vfunc(REL::VersionShift(0x04, 2, SKSE::RUNTIME_SSE_1_7_99), ActivateButton::thunk);
 		NPCActivateText::func = npc.write_vfunc(0x4C, NPCActivateText::thunk);
 
 		if (auto* input = RE::BSInputDeviceManager::GetSingleton(); input) {
