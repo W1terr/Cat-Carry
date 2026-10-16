@@ -108,20 +108,21 @@ namespace CatPose
 			return nullptr;
 		}
 
-		// chest, hips and head of the skeletons we know: skeever (cats), cow (Piglet), chicken, canine (foxes), hare
+		// chest, hips and head of the skeletons we know: skeever (cats), cow (Piglet), chicken, canine (foxes, dogs), hare,
+		// sabre cat (A Cat's Life, Skooma Cat)
 		NiAVObject* Chest(NiAVObject* a_root)
 		{
-			return AnyBone(a_root, { "Torso", "Ribcage", "Canine_Ribcage", "RabbitRibcage" });
+			return AnyBone(a_root, { "Torso", "Ribcage", "Canine_Ribcage", "RabbitRibcage", "Sabrecat_Ribcage[Spn4]" });
 		}
 
 		NiAVObject* Hips(NiAVObject* a_root)
 		{
-			return AnyBone(a_root, { "Pelvis", "Canine_Pelvis", "RabbitPelvis" });
+			return AnyBone(a_root, { "Pelvis", "Canine_Pelvis", "RabbitPelvis", "Sabrecat_[pelv]" });
 		}
 
 		NiAVObject* HeadBone(NiAVObject* a_root)
 		{
-			return AnyBone(a_root, { "HEAD", "Scull", "Canine_Head", "RabbitHead" });
+			return AnyBone(a_root, { "HEAD", "Scull", "Canine_Head", "RabbitHead", "Sabrecat_Head [Head]" });
 		}
 
 		bool Inside(const NiAVObject* a_node, const NiAVObject* a_root)
@@ -369,6 +370,15 @@ namespace CatPose
 			Add(root, Chain::kFoot, (hare + "LegPalm").c_str(), (hare + "LegToe").c_str(), 0.6f, right);
 			Add(root, Chain::kFrontUpper, (hare + "UpperArm").c_str(), (hare + "FormArm").c_str(), 1.0f, right);
 			Add(root, Chain::kFrontLower, (hare + "FormArm").c_str(), (hare + "Palm").c_str(), 0.9f, right);
+			// sabre cat skeleton (A Cat's Life, Skooma Cat): "Sabrecat_LeftThigh[LThi]" ...
+			const std::string word = right ? "Right" : "Left";
+			const auto        sabre = [&](const char* a_part, const char* a_tag) { return std::format("Sabrecat_{}{}[{}{}]", word, a_part, side, a_tag); };
+			Add(root, Chain::kHindLeg, sabre("Thigh", "Thi").c_str(), sabre("Calf", "Clf").c_str(), 0.6f, right);
+			Add(root, Chain::kHindLeg, sabre("Calf", "Clf").c_str(), sabre("Foot", "Fot").c_str(), 0.4f, right);
+			Add(root, Chain::kFoot, sabre("Foot", "Fot").c_str(), sabre("Toe0", "T00").c_str(), 0.6f, right);
+			Add(root, Chain::kFrontUpper, sabre("UpperArm", "Uar").c_str(), sabre("Forearm", "Far").c_str(), 1.0f, right);
+			Add(root, Chain::kFrontLower, sabre("Forearm", "Far").c_str(), sabre("Hand", "Hnd").c_str(), 0.9f, right);
+			Add(root, Chain::kPaw, sabre("Hand", "Hnd").c_str(), sabre("Finger1", "F10").c_str(), 0.7f, right);
 		}
 		Add(root, Chain::kTail, "Tail1", "Tail2", 0.55f);
 		Add(root, Chain::kTail, "Tail2", "Tail3", 0.6f);
@@ -381,6 +391,9 @@ namespace CatPose
 		Add(root, Chain::kNeck, "Canine_Neck1", "Canine_Head", 0.35f);
 		Add(root, Chain::kTail, "RabbitTail1", "RabbitTail2", 0.55f);
 		Add(root, Chain::kNeck, "RabbitNeck1", "RabbitHead", 0.35f);
+		Add(root, Chain::kTail, "Sabrecat_Tail0[Tal0]", "Sabrecat_Tail1[Tal1]", 0.55f);
+		Add(root, Chain::kTail, "Sabrecat_Tail1[Tal1]", "Sabrecat_Tail2[Tal2]", 0.6f);
+		Add(root, Chain::kNeck, "Sabrecat_Neck[Nek0]", "Sabrecat_Head [Head]", 0.35f);
 		// The skeleton has no finger / toe bones: the paws are turned towards where their fingers and toes are (the
 		// slots that follow the palm / ankle), so they hang with the leg instead of sticking out flat like hooks.
 		for (const auto& [name, chain, weight] : { std::tuple{ "LArm_Palm", Chain::kPaw, 0.7f }, std::tuple{ "RArm_Palm", Chain::kPaw, 0.7f },
@@ -410,8 +423,8 @@ namespace CatPose
 		if (auto* head = HeadBone(root); head) {
 			std::optional<NiPoint3> nose;
 			auto*                   lip = AnyBone(root, { "UpperLipFront", "Canine_FrontLip" });
-			auto*                   leftMuzzle = Bone(root, "Scull_[Lmuzzel]");
-			auto*                   rightMuzzle = Bone(root, "Scull_[Rmuzzel]");
+			auto*                   leftMuzzle = AnyBone(root, { "Scull_[Lmuzzel]", "Sabrecat_Head[LM01]" });
+			auto*                   rightMuzzle = AnyBone(root, { "Scull_[Rmuzzel]", "Sabrecat_Head[RM01]" });
 			if (lip) {
 				nose = lip->world.translate;
 			} else if (leftMuzzle && rightMuzzle) {
@@ -429,8 +442,10 @@ namespace CatPose
 			posed.aim.weight = 0.85f;
 			state.bones.push_back(std::move(posed));
 			state.headUp = Normalized(head->world.rotate.Transpose() * (root->world.rotate * NiPoint3{ 0.0f, 0.0f, 1.0f }), state.headUp);
-			// after the head (they're its children): jaw and ears (cow, canine, hare skeletons)
+			// after the head (they're its children): jaw and ears (cow, canine, hare, sabre cat skeletons)
 			for (const auto& [name, chain, right] : { std::tuple{ "Jaw", Chain::kJaw, false }, std::tuple{ "Canine_JawBone", Chain::kJaw, false },
+					 std::tuple{ "Sabrecat_Head[jaw]", Chain::kJaw, false }, std::tuple{ "Sabrecat_HeadLeftEar[LEar]", Chain::kEar, false },
+					 std::tuple{ "Sabrecat_HeadRightEar[REar]", Chain::kEar, true },
 					 std::tuple{ "Scull_[Lear]", Chain::kEar, false }, std::tuple{ "Scull_[Rear]", Chain::kEar, true },
 					 std::tuple{ "Canine_LEar01", Chain::kEar, false }, std::tuple{ "Canine_REar01", Chain::kEar, true },
 					 std::tuple{ "RabbitLEar01", Chain::kEar, false }, std::tuple{ "RabbitREar01", Chain::kEar, true } }) {

@@ -619,6 +619,10 @@ namespace Carry
 			if (!camera) {
 				return;
 			}
+			// conversation camera mods have the camera during a talk
+			if (auto* ui = RE::UI::GetSingleton(); ui && ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME)) {
+				return;
+			}
 			if (camera->IsInFirstPerson()) {
 				SKSE::GetTaskInterface()->AddTask([]() {
 					if (auto* camera = RE::PlayerCamera::GetSingleton(); camera && camera->IsInFirstPerson() && Carry::Active()) {
@@ -1485,20 +1489,34 @@ namespace Carry
 			}
 			return true;
 		}
-		// a tap on Activate with the cat in your arms still opens doors
-		void ActivateDoor()
+		// the Activate key belongs to a menu now (in a conversation it picks the topics)
+		bool MenuHasKeys()
 		{
-			if (auto* ui = RE::UI::GetSingleton(); ui && (ui->GameIsPaused() || ui->IsMenuOpen(RE::Console::MENU_NAME))) {
+			auto* ui = RE::UI::GetSingleton();
+			return ui && (ui->GameIsPaused() || ui->IsMenuOpen(RE::Console::MENU_NAME) || ui->IsMenuOpen(RE::DialogueMenu::MENU_NAME));
+		}
+
+		// a tap on Activate with the cat in your arms still opens doors and talks to people (the cat stays in your arms)
+		void ActivateWhileHolding()
+		{
+			if (MenuHasKeys()) {
 				return;
 			}
 			auto* pick = RE::CrosshairPickData::GetSingleton();
 			auto  target = pick ? pick->GetActiveTarget().get() : nullptr;
-			if (!target || !target->GetBaseObject() || !target->GetBaseObject()->Is(RE::FormType::Door)) {
+			auto* base = target ? target->GetBaseObject() : nullptr;
+			if (!base) {
+				return;
+			}
+			auto*      actor = target->As<RE::Actor>();
+			const bool door = base->Is(RE::FormType::Door);
+			const bool talk = actor && actor != Cat() && !actor->IsDead();
+			if (!door && !talk) {
 				return;
 			}
 			SKSE::GetTaskInterface()->AddTask([handle = target->GetHandle()]() {
-				if (auto door = handle.get(); door) {
-					door->ActivateRef(RE::PlayerCharacter::GetSingleton(), 0, nullptr, 1, false);
+				if (auto ref = handle.get(); ref) {
+					ref->ActivateRef(RE::PlayerCharacter::GetSingleton(), 0, nullptr, 1, false);
 				}
 			});
 		}
@@ -1551,6 +1569,9 @@ namespace Carry
 			}
 			if (has("hare") || has("rabbit")) {
 				return { "hare", Style::kOneArm, 1.25f, 0.45f, 0.0f };  // a long thin body
+			}
+			if (has("sabrecat") || has("hs_cat")) {
+				return { "sabre cat", Style::kCat, 1.4f, 1.15f, 5.0f };  // the small cats on it: a long body, the spine along the top
 			}
 			if (has("canine") || has("wolf") || has("fox") || has("dog")) {
 				return { "canine", Style::kCat, 1.6f, 1.15f, 5.0f };  // a long body: the size limit shrinks it a lot
@@ -1876,6 +1897,11 @@ namespace Carry
 
 	void OnActivateKey(bool a_pressed, float a_heldFor)
 	{
+		// in a conversation the key picks the topics: holding it there mustn't put the cat down
+		if (MenuHasKeys()) {
+			key = {};
+			return;
+		}
 		if (a_pressed && a_heldFor <= 0.0f) {
 			key = {};
 			key.down = true;
@@ -1887,9 +1913,6 @@ namespace Carry
 			}
 			key.fired = true;
 			key.heldBack = {};
-			if (auto* ui = RE::UI::GetSingleton(); ui && (ui->GameIsPaused() || ui->IsMenuOpen(RE::Console::MENU_NAME))) {
-				return;
-			}
 			if (state.phase == Phase::kHold) {
 				state.putDownRequest = true;
 				return;
@@ -1909,7 +1932,7 @@ namespace Carry
 		const bool fired = key.fired;
 		key = {};
 		if (!fired && state.phase == Phase::kHold) {
-			ActivateDoor();
+			ActivateWhileHolding();
 			return;
 		}
 		if (!fired && heldBack) {
