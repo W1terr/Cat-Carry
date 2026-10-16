@@ -1,8 +1,7 @@
 """
 Checks the translations in res/core/SKSE/Plugins/CatCarry/lang against the texts the code translates.
 
-The English texts are the keys: T("..."), F("..."), Id("..."), Hint("..."), Lang::Copy("..."), kGlyphHint and the animal
-names (sName of the animal files, shown in the menu).
+The English texts are the keys: T("..."), F("..."), Id("..."), Hint("..."), Lang::Copy("...") and kGlyphHint.
 Reports keys missing from a language file, keys the code no longer uses and broken {} / % placeholders.
 usage: python check_lang.py [--keys]   (--keys: print the keys as a json template)
 """
@@ -33,11 +32,6 @@ def code_keys() -> list[str]:
             add(json.loads(m.group(1)))
         for m in re.finditer(rf"kGlyphHint\s*=\s*({LITERAL})", src):
             add(json.loads(m.group(1)))
-    for path in sorted((ROOT / "res").rglob("Animals/*.ini")):
-        for line in path.read_text(encoding="utf-8").splitlines():
-            m = re.match(r"\s*sName\s*=\s*(.+?)\s*$", line)
-            if m:
-                add(m.group(1))
     return keys
 
 

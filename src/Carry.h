@@ -1,34 +1,9 @@
 #pragma once
 
-#include <filesystem>
-
-// Picking a cat up, holding it in your arms and putting it down again.
+// Picking a cat (or another small animal) up, holding it in your arms and putting it down again.
 namespace Carry
 {
-	// how an animal holds its head in your arms (per animal file, tuned live in SKSE Menu Framework)
-	struct Head
-	{
-		float turn{ 1.0f };   // how far it follows its look around: 0 = in line with its body .. 1 = full
-		float pitch{ 0.0f };  // degrees: + nose up
-		float yaw{ 0.0f };    // degrees: to one side (mirrored when it's held on your other side)
-		float roll{ 0.0f };   // degrees: tilted (mirrored like yaw)
-		float neck{ 1.0f };   // how much the neck lifts the head: 0 none .. 2 double
-	};
-
-	struct AnimalHead
-	{
-		std::string           name;
-		std::filesystem::path file;  // its animal file (saved back there)
-		Head                  head;
-		bool                  piglet{ false };  // not shown in the menu
-	};
-
-	// one per animal file, editable while the game runs
-	std::vector<AnimalHead>& Heads();
-	// writes the head values back into the animal files
-	void SaveHeads();
-
-	// after the game data loaded: finds the cat races from the settings
+	// after the game data loaded: finds the animals' races from the animal files and CatCarry.ini
 	void Init();
 
 	bool IsCat(RE::TESObjectREFR* a_ref);

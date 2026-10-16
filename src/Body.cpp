@@ -441,13 +441,40 @@ namespace Body
 			state.head.Update();
 		}
 
-		void SolveArm(Arm& a_arm, const HandGoal& a_goal)
+		// the hand straight on from the forearm, its palm facing where the goal's palm faces: where the forearm will
+		// point depends on the hand (the wrist target is behind the palm), so twice
+		HandGoal StraightWrist(const HandGoal& a_goal, const Arm& a_arm)
+		{
+			HandGoal       goal = a_goal;
+			const NiPoint3 palmFacing = a_goal.rotation * NiPoint3{ 0.0f, -1.0f, 0.0f };
+			const NiPoint3 s = a_arm.upper.node->world.translate;
+			const float    a = Length(a_arm.fore.node->world.translate - s);
+			const float    b = Length(a_arm.hand.node->world.translate - a_arm.fore.node->world.translate);
+			if (a < 1e-3f || b < 1e-3f) {
+				return goal;
+			}
+			for (int pass = 0; pass < 2; ++pass) {
+				const NiPoint3 target = HandTarget(goal, a_arm);
+				const NiPoint3 dir = Normalized(target - s);
+				const float    dist = std::clamp(Length(target - s), std::abs(a - b) + 0.5f, (a + b) * 0.995f);
+				const NiPoint3 pole = Normalized(M::Perpendicular(a_goal.pole, dir), { 0.0f, 0.0f, -1.0f });
+				const float    cosine = std::clamp((a * a + dist * dist - b * b) / (2.0f * a * dist), -1.0f, 1.0f);
+				const float    sine = std::sqrt(1.0f - cosine * cosine);
+				const NiPoint3 elbow = s + (dir * cosine + pole * sine) * a;
+				const NiPoint3 forearm = Normalized(s + dir * dist - elbow, dir);
+				goal.rotation = M::Align({ 0.0f, 0.0f, 1.0f }, { 0.0f, -1.0f, 0.0f }, forearm, palmFacing);
+			}
+			return goal;
+		}
+
+		void SolveArm(Arm& a_arm, const HandGoal& a_wanted)
 		{
 			a_arm.twistAngle = 0.0f;
-			const float w = M::Clamp01(a_goal.weight);
+			const float w = M::Clamp01(a_wanted.weight);
 			if (w <= 0.0f) {
 				return;
 			}
+			const HandGoal a_goal = a_wanted.straight ? StraightWrist(a_wanted, a_arm) : a_wanted;
 			const NiPoint3  s = a_arm.upper.node->world.translate;
 			const NiPoint3  e0 = a_arm.fore.node->world.translate;
 			const NiPoint3  h0 = a_arm.hand.node->world.translate;

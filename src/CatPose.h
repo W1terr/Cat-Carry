@@ -1,7 +1,8 @@
 #pragma once
 
 // The cat in the player's arms: the real cat's own 3D (the cat is frozen meanwhile), placed every frame and posed by
-// us: legs and tail hang down, the head looks around. Works with the cats' skeever skeleton and the cow skeleton (Piglet).
+// us: legs and tail hang down, the head looks around. Knows the skeever (cats), chicken, hare, canine (foxes, dogs) and cow
+// (Piglet) skeletons.
 namespace CatPose
 {
 	// the cat's body in its own root space (root units, before the root's scale)
@@ -28,6 +29,7 @@ namespace CatPose
 		float headYaw{ 0.0f };
 		float headRoll{ 0.0f };
 		float neck{ 1.0f };       // neck lift amount
+		float legsBack{ 0.0f };   // hind legs tucked back towards the tail (animals held in one arm)
 	};
 
 	// body frame of a cat's 3D

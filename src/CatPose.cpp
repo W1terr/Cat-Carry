@@ -97,17 +97,31 @@ namespace CatPose
 			return skeleton ? skeleton->GetObjectByName(a_name) : nullptr;
 		}
 
-		// the chest: "Torso" on the cats' skeever skeleton, "Ribcage" on the cow skeleton (Piglet)
+		// the first of these bones the skeleton has
+		NiAVObject* AnyBone(NiAVObject* a_root, std::initializer_list<const char*> a_names)
+		{
+			for (const char* name : a_names) {
+				if (auto* bone = Bone(a_root, name); bone) {
+					return bone;
+				}
+			}
+			return nullptr;
+		}
+
+		// chest, hips and head of the skeletons we know: skeever (cats), cow (Piglet), chicken, canine (foxes), hare
 		NiAVObject* Chest(NiAVObject* a_root)
 		{
-			auto* bone = Bone(a_root, "Torso");
-			return bone ? bone : Bone(a_root, "Ribcage");
+			return AnyBone(a_root, { "Torso", "Ribcage", "Canine_Ribcage", "RabbitRibcage" });
+		}
+
+		NiAVObject* Hips(NiAVObject* a_root)
+		{
+			return AnyBone(a_root, { "Pelvis", "Canine_Pelvis", "RabbitPelvis" });
 		}
 
 		NiAVObject* HeadBone(NiAVObject* a_root)
 		{
-			auto* bone = Bone(a_root, "HEAD");
-			return bone ? bone : Bone(a_root, "Scull");
+			return AnyBone(a_root, { "HEAD", "Scull", "Canine_Head", "RabbitHead" });
 		}
 
 		bool Inside(const NiAVObject* a_node, const NiAVObject* a_root)
@@ -126,7 +140,7 @@ namespace CatPose
 			return (w.rotate.Transpose() * (a_world - w.translate)) * (1.0f / w.scale);
 		}
 
-		void Add(NiAVObject* a_root, Chain a_chain, const char* a_bone, const char* a_child, float a_weight)
+		void Add(NiAVObject* a_root, Chain a_chain, const char* a_bone, const char* a_child, float a_weight, std::optional<bool> a_right = {})
 		{
 			auto* bone = Bone(a_root, a_bone);
 			auto* child = Bone(a_root, a_child);
@@ -138,7 +152,7 @@ namespace CatPose
 			posed.aim.child.reset(child);
 			posed.aim.captured = bone->local.rotate;
 			posed.aim.weight = a_weight;
-			posed.aim.phase = a_bone[0] == 'R' ? M::kPi : 0.0f;
+			posed.aim.phase = a_right.value_or(a_bone[0] == 'R') ? M::kPi : 0.0f;
 			state.bones.push_back(std::move(posed));
 		}
 
@@ -196,7 +210,7 @@ namespace CatPose
 	{
 		Frame frame;
 		auto* torso = Chest(a_root);
-		auto* pelvis = Bone(a_root, "Pelvis");
+		auto* pelvis = Hips(a_root);
 		if (torso && pelvis) {
 			frame.torso = ToRoot(a_root, torso->world.translate);
 			frame.pelvis = ToRoot(a_root, pelvis->world.translate);
@@ -323,6 +337,11 @@ namespace CatPose
 			const std::string arm = std::format("{}Arm_", side);
 			Add(root, Chain::kFrontUpper, (arm + "Upper").c_str(), (arm + "Forearm").c_str(), 1.0f);
 			Add(root, Chain::kFrontLower, (arm + "Forearm").c_str(), (arm + "Palm").c_str(), 0.9f);
+			// chicken skeleton (chickens, Squelch, the Little Buddies): thigh, "cafe" (calf), ankle, toes
+			const std::string bird = side[0] == 'L' ? "Left" : "Right";
+			Add(root, Chain::kHindLeg, (bird + "Thigh").c_str(), (bird + "Cafe").c_str(), 0.6f);
+			Add(root, Chain::kHindLeg, (bird + "Cafe").c_str(), (bird + "Ankle").c_str(), 0.4f);
+			Add(root, Chain::kFoot, (bird + "Ankle").c_str(), std::format("{}AnkleToe10", side).c_str(), 0.6f);
 			// cow skeleton (Piglet): femur, tibia, cannon bone, then the hoof; humerus, radius, metacarpus, then the hoof
 			const std::string hind = side;
 			Add(root, Chain::kHindLeg, (hind + "Femur").c_str(), (hind + "Tibia").c_str(), 0.6f);
@@ -333,12 +352,35 @@ namespace CatPose
 			Add(root, Chain::kFrontUpper, (front + "Humerus").c_str(), (front + "Radius").c_str(), 1.0f);
 			Add(root, Chain::kFrontLower, (front + "Radius").c_str(), (front + "Metacarpus").c_str(), 0.9f);
 			Add(root, Chain::kPaw, (front + "Metacarpus").c_str(), (front + "PhalangesManus").c_str(), 0.7f);
+			const bool right = side[0] == 'R';
+			// canine skeleton (foxes)
+			const std::string back = std::format("Canine_{}BackLeg", side);
+			Add(root, Chain::kHindLeg, (back + "1").c_str(), (back + "2").c_str(), 0.6f, right);
+			Add(root, Chain::kHindLeg, (back + "2").c_str(), (back + "Palm").c_str(), 0.4f, right);
+			Add(root, Chain::kFoot, (back + "Palm").c_str(), (back + "Toe").c_str(), 0.6f, right);
+			const std::string fore = std::format("Canine_{}FrontLeg", side);
+			Add(root, Chain::kFrontUpper, (fore + "1").c_str(), (fore + "2").c_str(), 1.0f, right);
+			Add(root, Chain::kFrontLower, (fore + "2").c_str(), (fore + "Palm").c_str(), 0.9f, right);
+			Add(root, Chain::kPaw, (fore + "Palm").c_str(), (fore + "Toe").c_str(), 0.7f, right);
+			// hare skeleton (rabbits)
+			const std::string hare = std::format("Rabbit{}", side);
+			Add(root, Chain::kHindLeg, (hare + "LegThi").c_str(), (hare + "LegCaf").c_str(), 0.6f, right);
+			Add(root, Chain::kHindLeg, (hare + "LegCaf").c_str(), (hare + "LegPalm").c_str(), 0.4f, right);
+			Add(root, Chain::kFoot, (hare + "LegPalm").c_str(), (hare + "LegToe").c_str(), 0.6f, right);
+			Add(root, Chain::kFrontUpper, (hare + "UpperArm").c_str(), (hare + "FormArm").c_str(), 1.0f, right);
+			Add(root, Chain::kFrontLower, (hare + "FormArm").c_str(), (hare + "Palm").c_str(), 0.9f, right);
 		}
 		Add(root, Chain::kTail, "Tail1", "Tail2", 0.55f);
 		Add(root, Chain::kTail, "Tail2", "Tail3", 0.6f);
 		Add(root, Chain::kTail, "Tail3", "Tail4", 0.65f);
 		Add(root, Chain::kNeck, "Neck", "HEAD", 0.35f);
 		Add(root, Chain::kNeck, "Neck1", "Scull", 0.35f);
+		Add(root, Chain::kNeck, "Neck0", "HEAD", 0.35f);
+		Add(root, Chain::kTail, "Canine_Tail1", "Canine_Tail2", 0.55f);
+		Add(root, Chain::kTail, "Canine_Tail2", "Canine_Tail3", 0.6f);
+		Add(root, Chain::kNeck, "Canine_Neck1", "Canine_Head", 0.35f);
+		Add(root, Chain::kTail, "RabbitTail1", "RabbitTail2", 0.55f);
+		Add(root, Chain::kNeck, "RabbitNeck1", "RabbitHead", 0.35f);
 		// The skeleton has no finger / toe bones: the paws are turned towards where their fingers and toes are (the
 		// slots that follow the palm / ankle), so they hang with the leg instead of sticking out flat like hooks.
 		for (const auto& [name, chain, weight] : { std::tuple{ "LArm_Palm", Chain::kPaw, 0.7f }, std::tuple{ "RArm_Palm", Chain::kPaw, 0.7f },
@@ -367,7 +409,7 @@ namespace CatPose
 		}
 		if (auto* head = HeadBone(root); head) {
 			std::optional<NiPoint3> nose;
-			auto*                   lip = Bone(root, "UpperLipFront");
+			auto*                   lip = AnyBone(root, { "UpperLipFront", "Canine_FrontLip" });
 			auto*                   leftMuzzle = Bone(root, "Scull_[Lmuzzel]");
 			auto*                   rightMuzzle = Bone(root, "Scull_[Rmuzzel]");
 			if (lip) {
@@ -387,13 +429,16 @@ namespace CatPose
 			posed.aim.weight = 0.85f;
 			state.bones.push_back(std::move(posed));
 			state.headUp = Normalized(head->world.rotate.Transpose() * (root->world.rotate * NiPoint3{ 0.0f, 0.0f, 1.0f }), state.headUp);
-			// after the head (they're its children): jaw and ears of the cow skeleton
-			for (const auto& [name, chain] : { std::pair{ "Jaw", Chain::kJaw }, std::pair{ "Scull_[Lear]", Chain::kEar }, std::pair{ "Scull_[Rear]", Chain::kEar } }) {
+			// after the head (they're its children): jaw and ears (cow, canine, hare skeletons)
+			for (const auto& [name, chain, right] : { std::tuple{ "Jaw", Chain::kJaw, false }, std::tuple{ "Canine_JawBone", Chain::kJaw, false },
+					 std::tuple{ "Scull_[Lear]", Chain::kEar, false }, std::tuple{ "Scull_[Rear]", Chain::kEar, true },
+					 std::tuple{ "Canine_LEar01", Chain::kEar, false }, std::tuple{ "Canine_REar01", Chain::kEar, true },
+					 std::tuple{ "RabbitLEar01", Chain::kEar, false }, std::tuple{ "RabbitREar01", Chain::kEar, true } }) {
 				if (auto* bone = Bone(root, name); bone) {
 					Posed part{ chain, {} };
 					part.aim.bone.reset(bone);
 					part.aim.captured = bone->local.rotate;
-					part.aim.phase = name[6] == 'R' ? 1.0f : 0.0f;
+					part.aim.phase = right ? 1.0f : 0.0f;
 					state.bones.push_back(std::move(part));
 				}
 			}
@@ -472,7 +517,8 @@ namespace CatPose
 		const NiPoint3 side = rotation * body.side;
 		// standing, its hind legs point to its belly side; held upright that's forward: let them hang only half way down
 		// (a full turn at the hips stretched its belly)
-		const NiPoint3 hind = Normalized(down + belly * 0.9f);
+		const NiPoint3 tailward = rotation * (body.spine * -1.0f);
+		const NiPoint3 hind = Normalized(down + belly * 0.9f + tailward * a_mood.legsBack);
 		// front legs over your forearm like over a branch: upper leg forward, the rest hangs
 		const NiPoint3 frontUpper = Normalized(belly * a_pawsForward + down * 0.45f);
 		const NiPoint3 frontLower = Normalized(down + belly * 0.15f);

@@ -3,7 +3,7 @@ includes("lib/commonlibsse-ng")
 
 -- set project constants
 set_project("CatCarry")
-set_version("2.0.2")
+set_version("2.1.0")
 set_license("GPL-3.0")
 set_languages("c++23")
 set_warnings("allextra")
@@ -15,7 +15,7 @@ add_requires("nlohmann_json")
 
 -- define targets
 target("CatCarry")
-    set_version("2.0.2")
+    set_version("2.1.0")
     add_rules("commonlibsse-ng.plugin", {
         name = "CatCarry",
         author = "W1ter",

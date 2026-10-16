@@ -1,6 +1,5 @@
 #include "Menu.h"
 
-#include "Carry.h"
 #include "Framework.h"
 #include "Lang.h"
 #include "Settings.h"
@@ -32,7 +31,6 @@ namespace Menu
 		{
 			if (a_type == SKSEMenuFramework::Model::EventType::kCloseMenu) {
 				Settings::Save();
-				Carry::SaveHeads();
 			}
 		}
 
@@ -108,6 +106,21 @@ namespace Menu
 			Checkbox(Id("Pet the cat").c_str(), &s.petCat);
 			SliderFloat(Id("Pet it every").c_str(), &s.petEvery, 2.0f, 30.0f, T("%.0f s"));
 			Hint("Your hand on its chest strokes it twice, then holds it again");
+			SeparatorText(T("Animals held in one arm (chickens, Squelch, Little Buddies)"));
+			SliderFloat(Id("Hand right").c_str(), &s.handRight, -30.0f, 30.0f, "%.1f");
+			Hint("Where your hand holds it, from your chest (for the left side, mirrored on the right): moves your hand and the animal together");
+			SliderFloat(Id("Hand forward").c_str(), &s.handForward, 0.0f, 40.0f, "%.1f");
+			SliderFloat(Id("Hand up").c_str(), &s.handUp, -30.0f, 20.0f, "%.1f");
+			SliderFloat(Id("Animal right").c_str(), &s.animalRight, -20.0f, 20.0f, "%.1f");
+			Hint("Moves only the animal in your hand, your hand stays");
+			SliderFloat(Id("Animal forward").c_str(), &s.animalForward, -20.0f, 20.0f, "%.1f");
+			SliderFloat(Id("Animal up").c_str(), &s.animalUp, -20.0f, 20.0f, "%.1f");
+			SliderFloat(Id("Animal turned").c_str(), &s.animalTurn, -180.0f, 180.0f, "%.0f\xC2\xB0");
+			Hint("Turns only the animal round its middle, your hand stays: round the vertical, + = towards your middle");
+			SliderFloat(Id("Animal tipped").c_str(), &s.animalTip, -180.0f, 180.0f, "%.0f\xC2\xB0");
+			Hint("+ = its top away from you, - = towards you");
+			SliderFloat(Id("Animal tilted").c_str(), &s.animalTilt, -180.0f, 180.0f, "%.0f\xC2\xB0");
+			Hint("+ = its top out to your side, - = towards your middle");
 			if (Button(Id("Defaults for the holding pose").c_str())) {
 				const Settings::Values defaults;
 				s.side = defaults.side;
@@ -122,34 +135,15 @@ namespace Menu
 				s.pawsForward = defaults.pawsForward;
 				s.legHang = defaults.legHang;
 				s.headAway = defaults.headAway;
-			}
-
-			SeparatorText(T("Heads (pick the animal up, changes show right away; saved to its animal file)"));
-			bool any = false;
-			auto& heads = Carry::Heads();
-			for (std::size_t i = 0; i < heads.size(); ++i) {
-				auto& entry = heads[i];
-				if (entry.piglet) {
-					continue;  // tuned for good in Piglet.ini
-				}
-				any = true;
-				PushID(static_cast<int>(i));
-				Text("%s", T(entry.name.c_str()));
-				SliderFloat(Id("Look around").c_str(), &entry.head.turn, 0.0f, 1.0f, "%.2f");
-				Hint("How far the head follows its look around: 0 = in line with its body, 1 = full");
-				SliderFloat(Id("Head up / down").c_str(), &entry.head.pitch, -60.0f, 60.0f, "%.0f\xC2\xB0");
-				SliderFloat(Id("Head left / right").c_str(), &entry.head.yaw, -60.0f, 60.0f, "%.0f\xC2\xB0");
-				Hint("Mirrored when it's held on your other side");
-				SliderFloat(Id("Head tilt").c_str(), &entry.head.roll, -45.0f, 45.0f, "%.0f\xC2\xB0");
-				SliderFloat(Id("Neck lift").c_str(), &entry.head.neck, 0.0f, 2.0f, "%.2f");
-				Hint("How much the neck lifts the head up out of the body line: 0 none, 1 normal, 2 double");
-				if (Button(Id("Reset this head").c_str())) {
-					entry.head = Carry::Head{};
-				}
-				PopID();
-			}
-			if (!any) {
-				TextDisabled("%s", T("No animal files loaded"));
+				s.handRight = defaults.handRight;
+				s.handForward = defaults.handForward;
+				s.handUp = defaults.handUp;
+				s.animalRight = defaults.animalRight;
+				s.animalForward = defaults.animalForward;
+				s.animalUp = defaults.animalUp;
+				s.animalTurn = defaults.animalTurn;
+				s.animalTip = defaults.animalTip;
+				s.animalTilt = defaults.animalTilt;
 			}
 		}
 	}

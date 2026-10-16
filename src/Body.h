@@ -17,6 +17,7 @@ namespace Body
 		RE::NiPoint3  pole;        // world direction the elbow should point to
 		float         weight{ 0.0f };
 		float         curl{ 0.0f };  // 0 open .. 1 fist
+		bool          straight{ false };  // the hand straight on from the forearm, only the palm turned like rotation
 	};
 
 	struct Goals

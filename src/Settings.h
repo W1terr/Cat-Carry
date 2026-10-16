@@ -40,6 +40,18 @@ namespace Settings
 		bool  catLooksAround{ true };
 		bool  tailSway{ true };
 		float headAway{ 15.0f };      // degrees your head turns / tilts away from the cat's head while you hold it
+		// animals held in one arm (chickens, Squelch, the Little Buddies), for the left side (mirrored on the right):
+		// where your hand holds it, from your chest
+		float handRight{ -18.0f };
+		float handForward{ 12.5f };
+		float handUp{ -9.9f };
+		// ... and the animal moved / turned (degrees) in your hand
+		float animalRight{ 4.6f };
+		float animalForward{ 0.9f };
+		float animalUp{ 12.5f };
+		float animalTurn{ -107.0f };  // round the vertical, + = towards your middle
+		float animalTip{ 8.0f };      // + = its top away from you
+		float animalTilt{ 5.0f };     // + = its top out to your side
 		bool  petCat{ true };         // your chest hand strokes the cat now and then
 		float petEvery{ 7.0f };       // seconds between two pettings
 	};

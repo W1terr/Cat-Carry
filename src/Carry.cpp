@@ -44,6 +44,8 @@ namespace Carry
 		constexpr float kMinDistance = 26.0f;
 		constexpr float kPoseLength = 22.0f;  // a House Cat's chest to hips: the hand settings are made for it
 		constexpr float kPoseDepth = 6.0f;    // ... and its spine to the middle of its body, back to belly
+		// animals held in one arm (chicken skeleton): the hand this many body lengths (chest to hips) from the spine
+		constexpr float kOneArmRadius = 0.62f;
 
 		constexpr float kMaxSlide = 80.0f;
 		constexpr float kBaseLean = 6.0f * M::kDegrees;
@@ -58,6 +60,15 @@ namespace Carry
 		constexpr auto kKneelEnter = "IdleKneelingEnter";
 		constexpr auto kKneelExit = "IdleChairExitStart";
 		constexpr auto kDefaultState = "IdleForceDefaultState";
+
+		// how an animal is held: upright against your chest like a cat, the same with Piglet's show, or tucked against
+		// your chest in one arm (chickens, Squelch, the Little Buddies), the other arm free
+		enum class Style
+		{
+			kCat,
+			kPiglet,
+			kOneArm
+		};
 
 		enum class Phase
 		{
@@ -81,6 +92,18 @@ namespace Carry
 			float     radius{ 5.0f };
 			float     along{ 0.0f };  // along the spine from the anchor
 			NiMatrix3 hand;           // hand bone rotation in cat root space
+			bool      relative{ false };  // radius / along in the animal's body lengths (else House Cat sized units)
+			bool      straight{ false };  // the hand straight on from the forearm (one arm round an animal)
+		};
+
+		// how an animal holds its head in your arms (fHead* / fNeckLift in its animal file)
+		struct Head
+		{
+			float turn{ 1.0f };   // how far it follows its look around: 0 = in line with its body .. 1 = full
+			float pitch{ 0.0f };  // degrees: + nose up
+			float yaw{ 0.0f };    // degrees: to one side (mirrored when it's held on your other side)
+			float roll{ 0.0f };   // degrees: tilted (mirrored like yaw)
+			float neck{ 1.0f };   // how much the neck lifts the head: 0 none .. 2 double
 		};
 
 		struct BodyFrame
@@ -119,8 +142,8 @@ namespace Carry
 			float           animalSize{ 1.0f };   // from its animal file (CatCarry\Animals\*.ini)
 			float           animalGirth{ 1.0f };
 			float           animalBelly{ 0.0f };
-			bool            piglet{ false };
-			std::size_t     head{ std::string::npos };  // index into heads (npos: an animal without a file)
+			Style           style{ Style::kCat };
+			Head            head;  // from its animal file
 			// picking up / putting down: you stay on your spot facing the cat, the camera doesn't turn you
 			bool            locked{ false };
 			float           lockHeading{ 0.0f };
@@ -141,7 +164,8 @@ namespace Carry
 			float                  look{ 0.0f };
 		} state;
 
-		// the animals you can pick up: CatCarry\Animals\*.ini (FOMOD options) and sRaces of CatCarry.ini
+		// the animals you can pick up: CatCarry\Animals\*.ini (one per animal family: skeevers and cats, chickens, rabbits,
+		// foxes, dogs) and sRaces of CatCarry.ini
 		struct Animal
 		{
 			RE::TESRace* race{ nullptr };
@@ -149,16 +173,17 @@ namespace Carry
 			float        size{ 1.0f };   // times the size settings in your arms
 			float        girth{ 1.0f };  // how round it is: hands this much further from its spine
 			float        belly{ 0.0f };  // its body's middle this far below the spine bones (House Cat sized units)
-			bool         piglet{ false };  // sStyle = piglet: its own little show in your arms
-			std::size_t  head{ std::string::npos };  // its file's head settings in heads
+			Style        style{ Style::kCat };  // sStyle = cat / piglet / onearm, else from its skeleton
+			bool         styleSet{ false };
+			bool         sizeSet{ false };   // size, girth, belly not set in its file: from its skeleton
+			bool         girthSet{ false };
+			bool         bellySet{ false };
+			float        maxScale{ 0.0f };   // only animals at most this big (0 = any): foxes yes, wolves no
+			std::vector<std::string> skeletons;  // sSkeletons: every race with such a skeleton counts (lower case parts)
+			Head         head;
 		};
+		std::vector<Animal> skeletonRules;  // animal files with sSkeletons
 		std::vector<Animal>     animals;
-		std::vector<AnimalHead> heads;
-
-		Head CurrentHead()
-		{
-			return state.head < heads.size() ? heads[state.head].head : Head{};
-		}
 
 		const Animal* FindAnimal(const RE::TESRace* a_race)
 		{
@@ -236,13 +261,62 @@ namespace Carry
 			contact.angle = sign * kFlankAngle;
 			contact.radius = Settings::Get().chestRadius;
 			contact.along = a_torso ? 1.0f : 0.0f;
+			if (state.style == Style::kOneArm) {
+				contact.relative = true;
+				contact.radius = kOneArmRadius;
+				contact.along = a_torso ? -0.15f : 0.15f;
+			}
 			const NiPoint3 radial = Radial(f, contact.angle);
 			contact.hand = HandIn(Tangent(f, contact.angle) * sign, radial * -1.0f);
 			return contact;
 		}
 
-		std::array<Contact, 2> HoldContacts()
+		// the hand on the animal's side: it holds a cat's chest (and pets it) or holds a one-arm animal
+		int PettingHand()
 		{
+			return state.mirrored ? Body::kRight : Body::kLeft;
+		}
+
+		int FreeHand()
+		{
+			return PettingHand() == Body::kLeft ? Body::kRight : Body::kLeft;
+		}
+
+		NiTransform HoldTransform(const BodyFrame& a_body);
+		// where your hand holds the animal (without the animal's own moves and turns)
+		NiTransform HandHold(const BodyFrame& a_body);
+
+		// one arm round it: the hand on its flank towards your middle (a little to the front), fingers pointing back
+		// at you; found from where the animal is, so it fits whichever way it faces. The other hand lets go (it keeps
+		// its contact from the floor while it fades out).
+		std::array<Contact, 2> OneArmContacts(const BodyFrame& a_body)
+		{
+			const auto&     f = state.frame;
+			const float     mx = state.mirrored ? -1.0f : 1.0f;
+			const NiMatrix3 toCat = HandHold(a_body).rotate.Transpose();
+			const NiPoint3  flank = toCat * Normalized(a_body.right * (mx * 0.94f) + a_body.forward * 0.34f);
+			Contact         hold;
+			hold.relative = true;
+			hold.torso = false;
+			hold.angle = std::atan2(M::Dot(flank, f.side), M::Dot(flank, f.back));
+			hold.radius = kOneArmRadius;
+			hold.along = 0.45f;
+			hold.straight = true;
+			const NiPoint3 palm = Radial(f, hold.angle) * -1.0f;
+			const NiPoint3 back = toCat * (a_body.forward * -1.0f);
+			hold.hand = HandIn(Normalized(back - palm * M::Dot(back, palm), Tangent(f, hold.angle)), palm);
+
+			std::array<Contact, 2> contacts;
+			contacts[PettingHand()] = hold;
+			contacts[FreeHand()] = state.floorContact[FreeHand()];
+			return contacts;
+		}
+
+		std::array<Contact, 2> HoldContacts(const BodyFrame& a_body)
+		{
+			if (state.style == Style::kOneArm) {
+				return OneArmContacts(a_body);
+			}
 			const auto& s = Settings::Get();
 			const auto& f = state.frame;
 			const float mx = state.mirrored ? -1.0f : 1.0f;
@@ -276,6 +350,8 @@ namespace Carry
 			c.radius = a.radius + (b.radius - a.radius) * t;
 			c.along = a.along + (b.along - a.along) * t;
 			c.hand = M::Slerp(a.hand, b.hand, t);
+			c.relative = b.relative;
+			c.straight = b.straight && t > 0.5f;
 			return c;
 		}
 
@@ -286,9 +362,10 @@ namespace Carry
 			const auto&    f = state.frame;
 			const float    scale = std::max(a_cat.scale, 0.01f);
 			const float    size = std::clamp(2.0f * f.halfLength * scale / kPoseLength, 0.5f, 2.0f);
+			const float    unit = a_contact.relative ? 2.0f * f.halfLength : size / scale;  // root units
 			const NiPoint3 local = (a_contact.torso ? f.torso : f.pelvis) +
-			                       (f.spine * a_contact.along + Radial(f, a_contact.angle) * (a_contact.radius * state.animalGirth) -
-			                           f.back * state.animalBelly) * (size / scale);
+			                       (f.spine * a_contact.along + Radial(f, a_contact.angle) * (a_contact.radius * state.animalGirth)) * unit -
+			                       f.back * (state.animalBelly * size / scale);
 			a_palm = a_cat * local;
 			a_rotation = a_cat.rotate * a_contact.hand;
 		}
@@ -307,11 +384,48 @@ namespace Carry
 		}
 
 		// the cat's root when it's in your arms
+		// Tucked against your chest on the side of the holding arm: leaning far out to your side, half turned (the pose
+		// tuned in game). Your hand holds this pose; the animal itself can be moved and turned in your hand on top
+		// (a_animal), round its middle, about fixed axes: turned (vertical), tipped (your right), tilted (your forward).
+		constexpr float kOneArmLean = 80.0f;
+		constexpr float kOneArmFacing = 88.0f;
+
+		NiTransform OneArmTransform(const BodyFrame& a_body, bool a_animal)
+		{
+			const auto&    s = Settings::Get();
+			const auto&    f = state.frame;
+			const float    mx = state.mirrored ? -1.0f : 1.0f;
+			NiTransform    world;
+			world.scale = HeldScale();
+			const float    radius = kOneArmRadius * 2.0f * f.halfLength * world.scale * state.animalGirth;
+			const float    lean = kOneArmLean * M::kDegrees;
+			const float    facing = kOneArmFacing * M::kDegrees;
+			const NiPoint3 head = Normalized(a_body.Direction(-mx * std::sin(lean), 0.0f, std::cos(lean)));
+			const NiPoint3 back = a_body.Direction(mx * std::sin(facing), -std::cos(facing), 0.0f);
+			// it shifts a little now and then (your hand goes along)
+			const NiMatrix3 shift = M::AxisAngle(a_body.up, 5.0f * std::sin(state.clock * 0.19f + 2.0f) * M::kDegrees) *
+			                        M::AxisAngle(a_body.forward, 3.0f * std::sin(state.clock * 0.31f) * M::kDegrees);
+			NiMatrix3 turn = M::Identity();
+			NiPoint3  center = a_body.Point(mx * s.handRight, s.handForward + radius, s.handUp);
+			if (a_animal) {
+				turn = M::AxisAngle(a_body.up, mx * s.animalTurn * M::kDegrees) *          // + = towards your middle
+				       M::AxisAngle(a_body.right, -s.animalTip * M::kDegrees) *            // + = its top away from you
+				       M::AxisAngle(a_body.forward, -mx * s.animalTilt * M::kDegrees);     // + = its top out to your side
+				center += a_body.Direction(mx * s.animalRight, s.animalForward, s.animalUp);
+			}
+			world.rotate = shift * turn * M::Align(f.spine, f.back, head, back);
+			world.translate = center - world.rotate * (f.middle * world.scale);
+			return world;
+		}
+
 		NiTransform HoldTransform(const BodyFrame& a_body)
 		{
 			const auto&    s = Settings::Get();
 			const auto&    f = state.frame;
 			const float    mx = state.mirrored ? -1.0f : 1.0f;
+			if (state.style == Style::kOneArm) {
+				return OneArmTransform(a_body, true);
+			}
 			// rounder animals further out, ones with the spine bones along their back (Piglet) closer in
 			const float    size = std::clamp(2.0f * f.halfLength * HeldScale() / kPoseLength, 0.5f, 2.0f);
 			const float    forward = s.catForward + size * (kPoseDepth * (state.animalGirth - 1.0f) - state.animalBelly);
@@ -327,6 +441,11 @@ namespace Carry
 			world.rotate = M::Align(f.spine, f.back, spine, belly * -1.0f);
 			world.translate = center - world.rotate * (f.middle * world.scale);
 			return world;
+		}
+
+		NiTransform HandHold(const BodyFrame& a_body)
+		{
+			return state.style == Style::kOneArm ? OneArmTransform(a_body, false) : HoldTransform(a_body);
 		}
 
 		// from one cat transform to another along a little arc
@@ -373,7 +492,7 @@ namespace Carry
 		{
 			const auto& s = Settings::Get();
 			Petting     pet;
-			if (!s.petCat) {
+			if (!s.petCat || state.style == Style::kOneArm) {  // one-arm: the other hand stays free
 				return pet;
 			}
 			const float every = std::max(s.petEvery, 1.0f);
@@ -435,6 +554,16 @@ namespace Carry
 			a_mood.tailWag = std::max({ 0.3f, a_petted, a_nuzzle, joy, 0.6f * sniff });
 			// ears: perked while sniffing, laid back while petted, a little back while nuzzling
 			a_mood.ears = 0.8f * sniff - 0.7f * a_petted - 0.3f * a_nuzzle;
+		}
+
+		// ---- one-arm animals ------------------------------------------------------------------------------------
+		// Chickens and the like bob their heads now and then and give a little kick of the legs; their legs tuck
+		// back a bit.
+		void OneArmShow(float a_holdTime, float a_petted, CatPose::Mood& a_mood)
+		{
+			a_mood.sniff = Window(std::fmod(a_holdTime, 4.3f), 2.6f, 3.6f, 0.15f) * (1.0f - a_petted);
+			a_mood.paddle = 0.45f * Window(std::fmod(a_holdTime + 2.0f, 9.0f), 0.0f, 0.7f, 0.15f);
+			a_mood.legsBack = 0.4f;
 		}
 
 		// ---- controls ------------------------------------------------------------------------------------------
@@ -879,7 +1008,7 @@ namespace Carry
 					player->NotifyAnimationGraph(kDefaultState);
 				}
 			}
-			state.holdContact = HoldContacts();
+			state.holdContact = HoldContacts(Frame(Player()));
 			state.phase = Phase::kLift;
 			state.time = 0.0f;
 		}
@@ -979,10 +1108,12 @@ namespace Carry
 		struct Pose
 		{
 			NiTransform              cat;
+			std::optional<NiTransform> hand;  // where the hands hold it, if not where the animal is (one arm: moved in your hand)
 			bool                     placed{ false };  // we place and pose the cat's 3D (else the game does)
 			std::array<Contact, 2>   contacts;
 			std::array<NiPoint3, 2>  poles;
 			float                    weight{ 0.0f };
+			std::array<float, 2>     hands{ 1.0f, 1.0f };  // per hand on top of weight (one-arm: the free hand lets go)
 			float                    curl{ 0.0f };
 			float                    catHold{ 0.0f };
 			float                    leanAmount{ 0.0f };  // 0..1 of the lean the reach needs
@@ -1001,6 +1132,9 @@ namespace Carry
 		{
 			const int   chest = state.mirrored ? Body::kRight : Body::kLeft;
 			std::array<NiPoint3, 2> poles;
+			if (state.style == Style::kOneArm) {
+				return { a_body.Direction(-1.0f, 0.4f, -0.6f), a_body.Direction(1.0f, 0.4f, -0.6f) };
+			}
 			for (int hand = 0; hand < 2; ++hand) {
 				const float out = hand == Body::kLeft ? -1.0f : 1.0f;
 				poles[hand] = hand == chest ? a_body.Direction(out * 1.0f, 0.5f, -0.6f) : a_body.Direction(out * 1.0f, -0.25f, -0.8f);
@@ -1137,6 +1271,7 @@ namespace Carry
 				{
 					const float e = M::Smooth(t / kLiftTime);
 					pose.cat = Between(state.ground, HoldTransform(a_body), e, 4.0f);
+					pose.hand = Between(state.ground, HandHold(a_body), e, 4.0f);
 					pose.placed = true;
 					pose.weight = 1.0f;
 					pose.curl = 1.0f;
@@ -1145,31 +1280,41 @@ namespace Carry
 					pose.catHold = e;
 					pose.leanAmount = 1.0f - e;
 					pose.look = 1.0f - e;
+					if (state.style == Style::kOneArm) {
+						pose.hands[FreeHand()] = 1.0f - e;
+					}
 				}
 				break;
 			case Phase::kHold:
 				{
 					pose.cat = HoldTransform(a_body);
+					pose.hand = HandHold(a_body);
 					pose.placed = true;
 					pose.weight = 1.0f;
 					pose.curl = 1.0f;
 					pose.contacts = state.holdContact;
 					pose.poles = HoldPoles(a_body);
 					pose.catHold = 1.0f;
+					if (state.style == Style::kOneArm) {
+						pose.hands[FreeHand()] = 0.0f;
+						pose.contacts[PettingHand()] = OneArmContacts(a_body)[PettingHand()];
+					}
 					// a glance at the cat now and then
 					const float cycle = std::fmod(state.clock, 9.0f);
 					pose.look = cycle > 6.5f ? 0.6f * std::sin(M::kPi * (cycle - 6.5f) / 2.5f) : 0.0f;
 					// and now and then a stroke over its chest (and a look at it meanwhile)
 					const Petting pet = PettingNow(t);
 					if (pet.weight > 0.0f) {
-						const int chest = state.mirrored ? Body::kRight : Body::kLeft;
+						const int chest = PettingHand();
 						pose.contacts[chest] = Blend(state.holdContact[chest], PetContact(pet), pet.weight);
 						pose.petted = pet.weight;
 						pose.look = std::max(pose.look, 0.7f * pet.weight);
 					}
-					if (state.piglet) {
+					if (state.style == Style::kPiglet) {
 						PigletShow(t, pose.petted, pose.mood, pose.nuzzle);
 						pose.look = std::max(pose.look, 0.6f * pose.nuzzle);
+					} else if (state.style == Style::kOneArm) {
+						OneArmShow(t, pose.petted, pose.mood);
 					}
 				}
 				break;
@@ -1177,6 +1322,7 @@ namespace Carry
 				{
 					const float e = M::Smooth((t - kLowerStart) / (kLowerTime - kLowerStart));
 					pose.cat = Between(HoldTransform(a_body), state.ground, e, 3.0f);
+					pose.hand = Between(HandHold(a_body), state.ground, e, 3.0f);
 					pose.placed = true;
 					pose.weight = 1.0f;
 					pose.curl = 1.0f;
@@ -1185,6 +1331,9 @@ namespace Carry
 					pose.catHold = 1.0f - e;
 					pose.leanAmount = e;
 					pose.look = M::Smooth(t / 0.5f);
+					if (state.style == Style::kOneArm) {
+						pose.hands[FreeHand()] = e;  // back to help putting it down
+					}
 				}
 				break;
 			case Phase::kQuickDrop:
@@ -1197,6 +1346,9 @@ namespace Carry
 					pose.contacts = state.holdContact;
 					pose.poles = HoldPoles(a_body);
 					pose.catHold = 1.0f - e;
+					if (state.style == Style::kOneArm) {
+						pose.hands[FreeHand()] = 0.0f;
+					}
 				}
 				break;
 			case Phase::kLetGo:
@@ -1236,7 +1388,7 @@ namespace Carry
 					look = Normalized(M::Lerp(look, Normalized(toYou + rub), 0.85f * pose->nuzzle), look);
 				}
 				// long heads (Piglet's snout) stay mostly in line with the body: only a little of the look
-				const Head head = CurrentHead();
+				const Head& head = state.head;
 				if (head.turn < 1.0f) {
 					const NiPoint3 along = Normalized(pose->cat.rotate * state.frame.spine, look);
 					look = Normalized(M::Lerp(along, look, std::max(head.turn, 0.0f)), look);
@@ -1255,14 +1407,15 @@ namespace Carry
 			goals.right = body.right;
 			for (int hand = 0; hand < 2; ++hand) {
 				auto& goal = goals.hands[hand];
-				ContactInWorld(pose->contacts[hand], pose->cat, goal.palm, goal.rotation);
+				ContactInWorld(pose->contacts[hand], pose->hand.value_or(pose->cat), goal.palm, goal.rotation);
 				goal.pole = pose->poles[hand];
-				goal.weight = pose->weight;
+				goal.weight = pose->weight * pose->hands[hand];
+				goal.straight = pose->contacts[hand].straight;
 				goal.curl = s.fingerCurl * pose->curl;
 			}
 			// an open hand for petting
 			if (pose->petted > 0.0f) {
-				auto& chest = goals.hands[state.mirrored ? Body::kRight : Body::kLeft];
+				auto& chest = goals.hands[PettingHand()];
 				chest.curl *= 1.0f - 0.75f * pose->petted;
 			}
 			// bend forward as far as the reach needs (plus a little), eased
@@ -1360,6 +1513,80 @@ namespace Carry
 			return first == std::string::npos ? std::string{} : a_text.substr(first, last - first + 1);
 		}
 
+		// The skeleton tells how an animal is held, so a patch only has to name the race: chicken skeleton (chickens,
+		// Squelch, the Little Buddies) = in one arm, anything else (the cats' skeever skeleton) = upright in both arms.
+		// what a skeleton means for holding: the carry, size, how round the body is, how far the spine bones are above
+		// the body's middle (the canine spine runs along the top of the back, like the cow's)
+		struct SkeletonKind
+		{
+			const char* name;
+			Style       style;
+			float       size;
+			float       girth;
+			float       belly;
+		};
+
+		std::string Lower(std::string a_text)
+		{
+			std::ranges::transform(a_text, a_text.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			return a_text;
+		}
+
+		// the race's skeleton path, lower case
+		std::string SkeletonPath(RE::TESRace* a_race)
+		{
+			for (auto& model : a_race->skeletonModels) {
+				if (const char* path = model.GetModel(); path && *path) {
+					return Lower(path);
+				}
+			}
+			return {};
+		}
+
+		SkeletonKind KindOf(const std::string& a_skeleton)
+		{
+			const auto has = [&](const char* a_part) { return a_skeleton.find(a_part) != std::string::npos; };
+			if (has("chicken")) {
+				return { "chicken", Style::kOneArm, 1.25f, 1.0f, 0.0f };
+			}
+			if (has("hare") || has("rabbit")) {
+				return { "hare", Style::kOneArm, 1.25f, 0.45f, 0.0f };  // a long thin body
+			}
+			if (has("canine") || has("wolf") || has("fox") || has("dog")) {
+				return { "canine", Style::kCat, 1.6f, 1.15f, 5.0f };  // a long body: the size limit shrinks it a lot
+			}
+			return { "skeever or other", Style::kCat, 1.0f, 1.0f, 0.0f };
+		}
+
+		void AddRace(RE::TESRace* a_race, const Animal& a_profile, const std::string& a_from)
+		{
+			if (FindAnimal(a_race)) {
+				return;
+			}
+			Animal             animal = a_profile;
+			const std::string  skeleton = SkeletonPath(a_race);
+			const SkeletonKind kind = KindOf(skeleton);
+			animal.race = a_race;
+			if (!animal.styleSet) {
+				animal.style = kind.style;
+			}
+			if (!animal.sizeSet) {
+				animal.size = kind.size;
+			}
+			if (!animal.girthSet) {
+				animal.girth = kind.girth;
+			}
+			if (!animal.bellySet) {
+				animal.belly = kind.belly;
+			}
+			animals.push_back(animal);
+			constexpr const char* kStyles[]{ "upright", "upright, Piglet's show", "held in one arm" };
+			logs::info("{}: race {} ({:08X}) from {}, {} skeleton ({}): {}{}, size {:.2f}, girth {:.2f}, belly {:.1f}{}", animal.name,
+				a_race->GetFormEditorID(), a_race->GetFormID(), a_from, kind.name, skeleton, kStyles[std::to_underlying(animal.style)],
+				animal.styleSet ? " (set in its file)" : "", animal.size, animal.girth, animal.belly,
+				animal.maxScale > 0.0f ? std::format(", only up to scale {:.2f}", animal.maxScale) : "");
+		}
+
 		void AddRaces(const std::string& a_list, const Animal& a_animal)
 		{
 			auto*       data = RE::TESDataHandler::GetSingleton();
@@ -1386,25 +1613,18 @@ namespace Carry
 					logs::info("{}: no race {:X} in {} (plugin not loaded?)", a_animal.name, local, plugin);
 					continue;
 				}
-				if (FindAnimal(race)) {
-					continue;
-				}
-				Animal animal = a_animal;
-				animal.race = race;
-				animals.push_back(animal);
-				logs::info("{}: race {} ({:08X}) from {}, size {:.2f}, girth {:.2f}, belly {:.1f}{}", animal.name, race->GetFormEditorID(),
-					race->GetFormID(), plugin, animal.size, animal.girth, animal.belly, animal.piglet ? ", piglet style" : "");
+				AddRace(race, a_animal, plugin);
 			}
 		}
 
-		// one animal file: [Animal] sName, sRaces, fSize, fGirth, fBelly
+		// one animal file: [Animal] sName, sRaces, sSkeletons, fMaxScale, sStyle, fSize, fGirth, fBelly, head settings
 		void LoadAnimal(const std::filesystem::path& a_path)
 		{
 			std::ifstream file(a_path);
 			std::string   line;
 			std::string   races;
 			Animal        animal;
-			Head          head;
+			Head&         head = animal.head;
 			animal.name = a_path.stem().string();
 			while (std::getline(file, line)) {
 				line = Trim(line);
@@ -1431,14 +1651,31 @@ namespace Carry
 					races = value;
 				} else if (field == "fsize") {
 					number(animal.size);
+					animal.sizeSet = true;
 				} else if (field == "fgirth") {
 					number(animal.girth);
+					animal.girthSet = true;
 				} else if (field == "fbelly") {
 					number(animal.belly);
+					animal.bellySet = true;
+				} else if (field == "fmaxscale") {
+					number(animal.maxScale);
+				} else if (field == "sskeletons") {
+					std::size_t start = 0;
+					while (start <= value.size()) {
+						const auto end = std::min(value.find(',', start), value.size());
+						if (auto part = Lower(Trim(value.substr(start, end - start))); !part.empty()) {
+							std::ranges::replace(part, '/', '\\');
+							animal.skeletons.push_back(part);
+						}
+						start = end + 1;
+					}
 				} else if (field == "sstyle") {
 					std::string style = value;
 					std::ranges::transform(style, style.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-					animal.piglet = style == "piglet";
+					const bool oneArm = style == "onearm";
+					animal.styleSet = style == "cat" || style == "piglet" || oneArm;
+					animal.style = style == "piglet" ? Style::kPiglet : oneArm ? Style::kOneArm : Style::kCat;
 				} else if (field == "fheadturn") {
 					number(head.turn);
 				} else if (field == "fheadpitch") {
@@ -1455,16 +1692,17 @@ namespace Carry
 			animal.girth = std::clamp(animal.girth, 0.3f, 3.0f);
 			head.turn = std::clamp(head.turn, 0.0f, 1.0f);
 			head.neck = std::clamp(head.neck, 0.0f, 2.0f);
-			animal.head = heads.size();
-			heads.push_back({ animal.name, a_path, head, animal.piglet });
 			AddRaces(races, animal);
+			if (!animal.skeletons.empty()) {
+				skeletonRules.push_back(animal);
+			}
 		}
 	}
 
 	void Init()
 	{
 		animals.clear();
-		heads.clear();
+		skeletonRules.clear();
 		std::error_code error;
 		const std::filesystem::path folder{ "Data/SKSE/Plugins/CatCarry/Animals" };
 		std::vector<std::filesystem::path> files;
@@ -1478,54 +1716,25 @@ namespace Carry
 			LoadAnimal(path);
 		}
 		AddRaces(Settings::Get().races, Animal{ .name = "CatCarry.ini" });
-		if (animals.empty()) {
-			logs::warn("No animals to pick up: install House Cats (mihailhousecat.esp) and the matching FOMOD options");
+		// every other race with a skeleton an animal file asks for (sSkeletons: foxes and modded pets on the fox skeleton)
+		if (!skeletonRules.empty()) {
+			if (auto* data = RE::TESDataHandler::GetSingleton(); data) {
+				for (auto* race : data->GetFormArray<RE::TESRace>()) {
+					if (!race || FindAnimal(race)) {
+						continue;
+					}
+					const std::string skeleton = SkeletonPath(race);
+					for (const auto& rule : skeletonRules) {
+						if (std::ranges::any_of(rule.skeletons, [&](const std::string& a_part) { return skeleton.find(a_part) != std::string::npos; })) {
+							AddRace(race, rule, "its skeleton");
+							break;
+						}
+					}
+				}
+			}
 		}
-	}
-
-	std::vector<AnimalHead>& Heads()
-	{
-		return heads;
-	}
-
-	void SaveHeads()
-	{
-		for (const auto& entry : heads) {
-			std::vector<std::string> lines;
-			{
-				std::ifstream file(entry.file);
-				std::string   line;
-				while (std::getline(file, line)) {
-					lines.push_back(line);
-				}
-			}
-			const auto& h = entry.head;
-			const std::array<std::pair<const char*, float>, 5> values{ { { "fHeadTurn", h.turn }, { "fHeadPitch", h.pitch }, { "fHeadYaw", h.yaw },
-				{ "fHeadRoll", h.roll }, { "fNeckLift", h.neck } } };
-			for (const auto& [setting, value] : values) {
-				const std::string text = std::format("{} = {}", setting, std::round(value * 100.0f) / 100.0f);
-				auto              lower = [](std::string a_text) {
-                    std::ranges::transform(a_text, a_text.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                    return a_text;
-				};
-				const std::string settingLower = lower(setting);
-				auto              it = std::ranges::find_if(lines, [&](const std::string& a_line) {
-                    const auto equals = a_line.find('=');
-                    return equals != std::string::npos && lower(Trim(a_line.substr(0, equals))) == settingLower;
-                });
-				if (it != lines.end()) {
-					*it = text;
-				} else {
-					lines.push_back(text);
-				}
-			}
-			std::ofstream file(entry.file, std::ios::trunc);
-			for (const auto& line : lines) {
-				file << line << "\n";
-			}
-			if (!file) {
-				logs::warn("Couldn't write {}", entry.file.string());
-			}
+		if (animals.empty()) {
+			logs::warn("No animals to pick up: none of the supported pet mods is loaded");
 		}
 	}
 
@@ -1533,7 +1742,16 @@ namespace Carry
 	{
 		auto* actor = a_ref ? a_ref->As<RE::Actor>() : nullptr;
 		auto* race = actor ? actor->GetRace() : nullptr;
-		return race && FindAnimal(race);
+		const auto* animal = race ? FindAnimal(race) : nullptr;
+		if (!animal) {
+			return false;
+		}
+		// size limited animal files: a fox yes, a wolf on the same skeleton no
+		if (animal->maxScale > 0.0f && !(Active() && actor == Cat())) {
+			auto* root = actor->Get3D();
+			return root && root->world.scale <= animal->maxScale;
+		}
+		return true;
 	}
 
 	bool CanPickUp(RE::TESObjectREFR* a_ref)
@@ -1545,6 +1763,10 @@ namespace Carry
 		}
 		auto* cat = a_ref->As<RE::Actor>();
 		if (cat->IsDead() || cat->IsDisabled() || !cat->Get3D() || !player->Get3D(false)) {
+			return false;
+		}
+		// no enemies: wild skeevers, wolves
+		if (cat->IsHostileToActor(player)) {
 			return false;
 		}
 		if (M::Length(Flat(cat->GetPosition() - player->GetPosition())) > s.maxDistance) {
@@ -1566,7 +1788,7 @@ namespace Carry
 			state.animalSize = animal->size;
 			state.animalGirth = animal->girth;
 			state.animalBelly = animal->belly;
-			state.piglet = animal->piglet;
+			state.style = animal->style;
 			state.head = animal->head;
 		}
 		FreezeCat(cat);
